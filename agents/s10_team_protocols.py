@@ -75,6 +75,7 @@ VALID_MSG_TYPES = {
     "broadcast",
     "shutdown_request",
     "shutdown_response",
+    "plan_approval_request",
     "plan_approval_response",
 }
 
@@ -244,13 +245,13 @@ class TeammateManager:
                 "shutdown_response", {"request_id": req_id, "approve": approve},
             )
             return f"Shutdown {'approved' if approve else 'rejected'}"
-        if tool_name == "plan_approval":
+        if tool_name == "submit_plan_approval":
             plan_text = args.get("plan", "")
             req_id = str(uuid.uuid4())[:8]
             with _tracker_lock:
                 plan_requests[req_id] = {"from": sender, "plan": plan_text, "status": "pending"}
             BUS.send(
-                sender, "lead", plan_text, "plan_approval_response",
+                sender, "lead", plan_text, "plan_approval_request",
                 {"request_id": req_id, "plan": plan_text},
             )
             return f"Plan submitted (request_id={req_id}). Waiting for lead approval."
@@ -273,7 +274,7 @@ class TeammateManager:
              "input_schema": {"type": "object", "properties": {}}},
             {"name": "shutdown_response", "description": "Respond to a shutdown request. Approve to shut down, reject to keep working.",
              "input_schema": {"type": "object", "properties": {"request_id": {"type": "string"}, "approve": {"type": "boolean"}, "reason": {"type": "string"}}, "required": ["request_id", "approve"]}},
-            {"name": "plan_approval", "description": "Submit a plan for lead approval. Provide plan text.",
+            {"name": "submit_plan_approval", "description": "Submit a plan for lead approval. Provide plan text.",
              "input_schema": {"type": "object", "properties": {"plan": {"type": "string"}}, "required": ["plan"]}},
         ]
 
@@ -391,7 +392,7 @@ TOOL_HANDLERS = {
     "broadcast":         lambda **kw: BUS.broadcast("lead", kw["content"], TEAM.member_names()),
     "shutdown_request":  lambda **kw: handle_shutdown_request(kw["teammate"]),
     "shutdown_response": lambda **kw: _check_shutdown_status(kw.get("request_id", "")),
-    "plan_approval":     lambda **kw: handle_plan_review(kw["request_id"], kw["approve"], kw.get("feedback", "")),
+    "review_plan_approval": lambda **kw: handle_plan_review(kw["request_id"], kw["approve"], kw.get("feedback", "")),
 }
 
 # these base tools are unchanged from s02
@@ -418,7 +419,7 @@ TOOLS = [
      "input_schema": {"type": "object", "properties": {"teammate": {"type": "string"}}, "required": ["teammate"]}},
     {"name": "shutdown_response", "description": "Check the status of a shutdown request by request_id.",
      "input_schema": {"type": "object", "properties": {"request_id": {"type": "string"}}, "required": ["request_id"]}},
-    {"name": "plan_approval", "description": "Approve or reject a teammate's plan. Provide request_id + approve + optional feedback.",
+    {"name": "review_plan_approval", "description": "Approve or reject a teammate's plan. Provide request_id + approve + optional feedback.",
      "input_schema": {"type": "object", "properties": {"request_id": {"type": "string"}, "approve": {"type": "boolean"}, "feedback": {"type": "string"}}, "required": ["request_id", "approve"]}},
 ]
 
